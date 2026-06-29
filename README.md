@@ -1,157 +1,149 @@
-Aqui está um exemplo de um arquivo `README.md` para o seu jogo:
+# Guess Game - Docker Compose
 
----
-
-# Jogo de Adivinhação com Flask
-
-Este é um simples jogo de adivinhação desenvolvido utilizando o framework Flask. O jogador deve adivinhar uma senha criada aleatoriamente, e o sistema fornecerá feedback sobre o número de letras corretas e suas respectivas posições.
-
-## Funcionalidades
-
-- Criação de um novo jogo com uma senha fornecida pelo usuário.
-- Adivinhe a senha e receba feedback se as letras estão corretas e/ou em posições corretas.
-- As senhas são armazenadas  utilizando base64.
-- As adivinhações incorretas retornam uma mensagem com dicas.
-  
-## Requisitos
-
-- Python 3.8+ - 3.12
-- Flask
-- Um banco de dados local (ou um mecanismo de armazenamento configurado em `current_app.db`)
-- node 18.17.0
-
-## Instalação
-
-1. Clone o repositório:
-
-   ```bash
-   git clone https://github.com/fams/guess_game.git
-   cd guess-game
-   ```
-
-2. Crie um ambiente virtual e ative-o:
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   venv\Scripts\activate  # Windows
-   ```
-
-3. Instale as dependências:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Configure o banco de dados com as variáveis de ambiente no arquivo start-backend.sh
-    1. Para sqlite
-
-        ```bash
-            export FLASK_APP="run.py"
-            export FLASK_DB_TYPE="sqlite"            # Use SQLITE
-            export FLASK_DB_PATH="caminho/db.sqlite" # caminho do banco
-        ```
-
-    2. Para Postgres
-
-        ```bash
-            export FLASK_APP="run.py"
-            export FLASK_DB_TYPE="postgres"       # Use postgres
-            export FLASK_DB_USER="postgres"       # Usuário do banco
-            export FLASK_DB_NAME="postgres"       # Nome do Banco
-            export FLASK_DB_PASSWORD="secretpass" # Senha do banco
-            export FLASK_DB_HOST="localhost"      # Hostname
-            export FLASK_DB_PORT="5432"           # Porta
-        ```
-
-    3. Para DynamoDB
-
-        ```bash
-        export FLASK_APP="run.py"
-        export FLASK_DB_TYPE="dynamodb"       # Use postgres
-        export AWS_DEFAULT_REGION="us-east-1" # AWS region
-        export AWS_ACCESS_KEY_ID="FAKEACCESSKEY123456" 
-        export AWS_SECRET_ACCESS_KEY="FakeSecretAccessKey987654321"
-        export AWS_SESSION_TOKEN="FakeSessionTokenABCDEFGHIJKLMNOPQRSTUVXYZ1234567890"
-        ```
-
-5. Execute o backend
-
-   ```bash
-   ./start-backend.sh &
-   ```
-
-6. Cuidado! verifique se o seu linux está lendo o arquivo .sh com fim de linha do windows CRLF. Para verificar utilize o vim -b start-backend.sh
-
-## Frontend
-No diretorio de frontend
-
-1. Instale o node com o nvm. Se não tiver o nvm instalado, siga o [tutorial](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating)
-
-    ```bash
-    nvm install 18.17.0
-    nvm use 18.17.0
-    # Habilite o yarn
-    corepack enable
-    ```
-
-2. Instale as dependências do node com o npm:
-
-    ```bash
-    npm install
-    ```
-
-3. Exporte a url onde está executando o backend e execute o backend.
-
-   ```bash
-    export REACT_APP_BACKEND_URL=http://localhost:5000
-    yarn start
-   ```
-
-## Como Jogar
-
-### 1. Criar um novo jogo
-
-Acesse a url do frontend http://localhost:3000
-
-Digite uma frase secreta
-
-Envie
-
-Salve o game-id
+Este repositório implementa o aplicativo guess_game usando Docker Compose.
+Baseado no repositório disponibilizado pelo professor Fernando Augusto para o curso de Pós-Graduação de Engenharia de IA e MLOps da PUC Minas em:
+https://github.com/fams/guess_game
 
 
-### 2. Adivinhar a senha
+Inclui:
 
-Acesse a url do frontend http://localhost:3000
+- backend Python/Flask
+- banco de dados PostgreSQL com volume persistente do Docker
+- frontend React servido pelo NGINX
+- proxy reverso NGINX com balanceamento de carga entre instâncias de backend
 
-Vá para o endponint breaker
+## Arquitetura e design
 
-entre com o game_id que foi gerado pelo Creator
+### Serviços
 
-Tente adivinhar
+- postgres
+  - usa a imagem oficial postgres:16-alpine
+  - armazena os dados em um volume persistente para manter os dados do jogo entre reinícios
 
-## Estrutura do Código
+- backend1 e backend2
+  - executam o mesmo aplicativo Flask em containers separados
+  - fornecem redundância e permitem balanceamento de carga
+  - usam restart: always para reiniciar em caso de falha
 
-### Rotas:
+- nginx
+  - serve os arquivos estáticos do frontend React
+  - encaminha requisições /api/ para o upstream de backend
+  - usa um upstream chamado backend com backend1:5000 e backend2:5000
 
-- **`/create`**: Cria um novo jogo. Armazena a senha codificada em base64 e retorna um `game_id`.
-- **`/guess/<game_id>`**: Permite ao usuário adivinhar a senha. Compara a adivinhação com a senha armazenada e retorna o resultado.
+### Volumes e redes
 
-### Classes Importantes:
+- postgres_data
+  - volume Docker dedicado usado pelo serviço postgres
+  - garante que os dados do jogo persistam mesmo se o container for recriado
 
-- **`Guess`**: Classe responsável por gerenciar a lógica de comparação entre a senha e a tentativa do jogador.
-- **`WrongAttempt`**: Exceção personalizada que é levantada quando a tentativa está incorreta.
+- guess-network
+  - rede bridge Docker compartilhada por todos os serviços
+  - isola a comunicação entre nginx, backend1, backend2 e postgres
 
+### Estratégia de balanceamento de carga
 
+- O NGINX define um upstream backend com duas instâncias Flask.
+- Requisições para /api/ são encaminhadas para esse upstream.
+- O upstream distribui as requisições entre backend1 e backend2.
+- Isso melhora a resiliência e a capacidade para requisições simultâneas.
 
-## Melhorias Futuras
+## Arquivos importantes
 
-- Implementar autenticação de usuário para salvar e carregar jogos.
-- Adicionar limite de tentativas.
-- Melhorar a interface de feedback para as tentativas de adivinhação.
+- docker-compose.yml - orquestra serviços, redes e volumes
+- Dockerfile.backend - constrói o container do backend Flask
+- frontend/Dockerfile - constrói o frontend React e a imagem NGINX
+- frontend/default.conf - configura o proxy reverso e o balanceamento de carga
+- .dockerignore e frontend/.dockerignore - excluem artefatos de build dos contextos Docker
 
-## Licença
+## Instalar e executar
 
-Este projeto está licenciado sob a [MIT License](LICENSE).
+### Pré-requisitos
 
+- Docker instalado
+- Docker Compose disponível
+
+### Executar a aplicação
+
+A partir do diretório do projeto:
+
+```powershell
+cd c:\git_puc\guess_game
+docker compose up --build --detach
+```
+
+### URL de acesso
+
+Após iniciar o Docker Compose, abra:
+
+```text
+http://localhost:8080
+```
+
+### Verificação de saúde
+
+O endpoint de health está disponível em:
+
+```text
+http://localhost:8080/api/health
+```
+
+Resposta esperada:
+
+```json
+{"status": "ok"}
+```
+
+## Atualizar serviços
+
+### Atualizar backend
+
+- Modifique Dockerfile.backend ou use uma nova versão da imagem do backend.
+- Reconstrua e inicie o stack novamente:
+
+```powershell
+docker compose up --build --detach
+```
+
+### Atualizar frontend
+
+- Altere frontend/Dockerfile ou os arquivos de origem do frontend.
+- Reconstrua com:
+
+```powershell
+docker compose up --build --detach
+```
+
+### Atualizar banco de dados
+
+- Altere a tag da imagem Postgres em docker-compose.yml.
+- Reinicie o stack com:
+
+```powershell
+docker compose up --build --detach
+```
+
+## Decisões de design
+
+- postgres:16-alpine foi escolhido por ser uma imagem leve e compatível.
+- Dois containers de backend permitem balanceamento de carga e maior tolerância a falhas.
+- O NGINX serve o frontend e encaminha apenas solicitações de API, mantendo o frontend independente.
+- Um volume persistente dedicado mantém os dados do jogo seguros durante eventos de ciclo de vida do container.
+- restart: always aumenta a resiliência dos serviços.
+
+## Observações
+
+- O código da aplicação não foi modificado além da integração com Docker.
+- Arquivos criados ou modificados no projeto, para atender o desafio:
+  - docker-compose.yml
+  - Dockerfile.backend
+  - frontend/Dockerfile
+  - frontend/default.conf
+  - .dockerignore
+  - frontend/.dockerignore
+
+## Resultado verificado
+
+- O stack inicia corretamente.
+- O frontend é servido em http://localhost:8080.
+- http://localhost:8080/api/health retorna {"status": "ok"}.
+- Os serviços backend1, backend2, nginx e postgres permanecem em execução.
